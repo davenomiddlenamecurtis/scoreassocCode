@@ -22,7 +22,7 @@ extern "C"
 #define MAX_SUB 10000
 #endif
 #ifndef MAX_ID_LENGTH 
-#define MAX_ID_LENGTH 35
+#define MAX_ID_LENGTH 100
 #endif
 
 
@@ -38,7 +38,7 @@ public:
 
 class pathwaySubject {
 public:
-	char id[MAX_ID_LENGTH]; 
+	char id[MAX_ID_LENGTH+1]; 
 	int cc;
 	float totScore,score[MAX_LOCI];
 };
