@@ -1,7 +1,4 @@
-extern "C"
-{
-#include "scoreassoc.h"
-};
+#include "scoreassoc.hpp"
 
 #include "dcexpr.hpp"
 #include "safilterfuncs.hpp"
