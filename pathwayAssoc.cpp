@@ -235,6 +235,8 @@ float runOnePathway(char *line,pathwaySubject **sub,paParams *pp, int writeFile)
 			"p = %10.8f\n"
 			"SLP = %8.2f (signed log10(p), positive if cases score higher than controls)\n",
 			n[0], n[1], mean[0], mean[1], n[0] + n[1] - 2, tval, 2 * p, SLP);
+		if (pp->summaryOutputFile!=0)
+					fprintf(pp->summaryOutputFile,"%s\t%s\t%f\n",pathwayName,pathwayURL,SLP);
 		if (SLP > pp->geneLevelOutputThreshold)
 		{
 			fprintf(fo,"\n\nSLPs for individual genes:\n");
@@ -275,8 +277,6 @@ float runOnePathway(char *line,pathwaySubject **sub,paParams *pp, int writeFile)
 		}
 		
 		fclose(fo);
-		if (pp->summaryOutputFile!=0)
-					fprintf(pp->summaryOutputFile,"%s\t%s\t%f\n",pathwayName,pathwayURL,SLP);
 	}
 	if (mean[0]>mean[1])
 		p=1.0-p;
