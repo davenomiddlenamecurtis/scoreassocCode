@@ -1,5 +1,5 @@
 #include <ctype.h>
-#include "scoreassoc.h"
+#include "scoreassoc.hpp"
 
 void write_scores(char *fn,subject **sub,int nsub,float *score)
 {
