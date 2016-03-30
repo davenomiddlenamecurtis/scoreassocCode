@@ -1,12 +1,14 @@
-#ifndef SCOREASSOCH
-#define SCOREASSOCH
+#ifndef SCOREASSOCHPP
+#define SCOREASSOCHPP
 
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <math.h>
 
-#include "gcutils.h"
+extern "C" {
+#include "sagcutils.h"
+};
 
 #define MAX_COMMENT_LENGTH 100
 
@@ -17,9 +19,9 @@ int use_func_weights,use_cc_freqs[2],use_locus_names,use_comments,do_recessive_t
 
 typedef struct sa_par_info_t sa_par_info;
 
+enum { DE_NOVO, NON_MENDELIAN };
 struct non_mendelian_t {
-	int loc,sub;
-	enum { DE_NOVO, NON_MENDELIAN } nd;
+	int loc,sub,nd;
 };
 typedef struct non_mendelian_t non_mendelian;
 
