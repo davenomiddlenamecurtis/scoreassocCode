@@ -31,6 +31,17 @@ delete r1;
 return new dcexpr_double(rv);
 }
 
+dcexpr_val *weight_op(vnode *b1)
+{
+dcexpr_val *r1;
+int f;
+EVAL_R1;
+f=double(*r1);
+double rv=weight[currentLocus];
+delete r1;
+return new dcexpr_double(rv);
+}
+
 dcexpr_val *freq_op(vnode *b1)
 {
 dcexpr_val *r1;
@@ -84,6 +95,7 @@ int initExclusions(FILE *fp,char *extras[])
 	add_un_op("FREQ",freq_op); // frequency of this variant in controls or cases (0 or 1)
 	add_un_op("NSUB",nsub_op); // number of control or case subjects (0 or 1) typed for this variant 
 	add_un_op("ALTCOUNT",alt_count_op);	// number of ALT alleles possessed by subject s
+	add_un_op("WEIGHT",weight_op);	// weight of variant - this is the supplied functional weight because exclusions applied before frequency weights are calculated
 	add_bin_op_next("GENOCOUNT",geno_count_op); // number of case or control subjects who are have genototype - cc GENOCOUNT g AA (0 or 1, 0, 1 or 2)
 	for (nExc=0;fgets(long_line,LONG_LINE_LENGTH,fp) && sscanf(long_line,"%[^\n]",exclusionStr[nExc])==1;++nExc)
 	{
@@ -112,7 +124,7 @@ for (l=0;l<pi->n_loci_to_use;++l)
 	{
 		if (double(*exclusion[e].eval())!=0.0)
 		{
-			printf("Excluding locus %d because it fails this condition: %s (contfreq=%f,casefreq=%f)\n",currentLocus+1,exclusionStr[e],cc_freq[0][currentLocus],cc_freq[1][currentLocus]);
+			printf("Excluding locus %d (%s) because it fails this condition: %s(contfreq=%f,casefreq=%f)\n",currentLocus+1,names[currentLocus],exclusionStr[e],cc_freq[0][currentLocus],cc_freq[1][currentLocus]);
 			for (ll=l;ll<pi->n_loci_to_use-1;++ll)
 				pi->loci_to_use[ll]=pi->loci_to_use[ll+1];
 			--pi->n_loci_to_use;
