@@ -1,6 +1,6 @@
 /* gcutils.h */
-#ifndef GCUTILSH
-#define GCUTILSH
+#ifndef SAGCUTILSH
+#define SAGCUTILSH
 
 #include <stdio.h>
 
