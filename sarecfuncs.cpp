@@ -1,6 +1,6 @@
-/* scoreassoc.cpp */
+/* sarecfuncs.cpp */
 
-#include "scoreassoc.h"
+#include "scoreassoc.hpp"
 
 // Throughout, I am going to calculate a one-tailed p but then report SLP for the two-tailed p
 

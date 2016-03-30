@@ -1,4 +1,4 @@
-#include "scoreassoc.h"
+#include "scoreassoc.hpp"
 
 
 int sort_trios(subject **sub, int nsub, par_info *pi, subject **new_sub, non_mendelian *non_mendelians,int *n_non_mendelian,char *non_mendelian_report)

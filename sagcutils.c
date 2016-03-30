@@ -7,7 +7,7 @@
 #include <math.h>
 #include <ctype.h>
 
-#include "gcutils.h"
+#include "sagcutils.h"
 #include "cdflib.h"
 
 #ifndef MSDOS
