@@ -1,11 +1,11 @@
 /* gcutils.h */
-#ifndef SAGCUTILSH
-#define SAGCUTILSH
+#ifndef GCUTILSH
+#define GCUTILSH
 
 #include <stdio.h>
 
 #ifndef VERSION
-#define VERSION "2.9"
+#define VERSION "2.5"
 #endif
 
 #ifndef MAX_LOCI
@@ -20,10 +20,11 @@
 #ifndef MAX_LINE
 #define MAX_LINE 5000
 #endif
-
 #ifndef MAX_ID_LENGTH 
 #define MAX_ID_LENGTH 100
 #endif
+
+
 extern int ISTEMP;
 #define INT_SWAP(x,y) (ISTEMP=x,x=y,y=ISTEMP)
 
@@ -74,8 +75,8 @@ float hap_pair_prob[MAXHAPSPERGENO];
 
 typedef struct geno_probs_t geno_probs;
 
-struct subject_t {
-char id[MAX_ID_LENGTH+1]; int cc, group, skip; int all[MAX_LOCI][2]; long geno; int gc_geno; 
+struct subject_t { 
+char id[35]; int cc, group, skip; int all[MAX_LOCI][2]; long geno; int gc_geno; 
 };
 
 typedef struct subject_t subject;

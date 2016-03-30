@@ -1,17 +1,28 @@
 #include "scoreassoc.hpp"
 
-// Throughout, I am going to calculate a one-tailed p but then report SLP for the two-tailed p
-
-void do_recessive_HWE_test_with_haplotypes(FILE *fo, float *score, subject **sub, int nsub, par_info *pi, sa_par_info *spi,float cc_freq[2][MAX_LOCI], float cc_count[2][MAX_LOCI], int max_cc[2], float *weight, float *missing, int *rarer, char names[MAX_LOCI][20])
+void do_recessive_HWE_test_with_haplotypes(FILE *fo, float *score, subject **sub, int nsub, par_info *pi, sa_par_info *spi,float cc_freq[2][MAX_LOCI], float cc_count[2][MAX_LOCI], int max_cc[2], float *weight, float *missing, int *old_rarer, char names[MAX_LOCI][20])
 {
 	float tab[2][2],ex[2][2],col_tot[3],row_tot[2],N,counts[2][3],hom_counts[2],all_count[MAX_LOCI],hapMAF;
-	int r,c,s,l,pl,lll,a,first,all_genotype;
+	int r,c,s,l,ll,lll,a,first,all_genotype,rec_rarer[MAX_LOCI];
 	int n_loci_to_remove,loci_to_remove[MAX_LOCI],has_minor[2],num_minor;
 	double p,df,dchi;
 	float freq,tot,geno_prob[3],geno_count[MAX_LOCI][3];
 	int status,which=1;
 	par_info rec_pi; // use this to keep track of which loci we are using
 	// first thing we will do is remove loci which fail the weight threshold
+	// note that weights and rarer are indexed up to pi->n_loci_to_use
+	for (l=0,ll=0;l<pi->n_loci_to_use;++l)
+	{
+		if (weight[l]>=spi->weight_threshold)
+		{
+			rec_pi.loci_to_use[ll]=pi->loci_to_use[l];
+			rec_rarer[rec_pi.loci_to_use[ll]]=rarer[l]; // here is where we go back to indexing rec_rarer in the same way as other locus attributes
+			++ll;
+		}
+	}
+	rec_pi.n_loci_to_use=ll;
+
+	// from now on it impossible to marry up the weights with the loci listed in rec_pi
 	// hope that is OK
 	for (r=0;r<2;++r)
 	{
@@ -22,21 +33,17 @@ void do_recessive_HWE_test_with_haplotypes(FILE *fo, float *score, subject **sub
 	}
 	fprintf(fo,"\nRecessive analyses based on loci with weight reaching %f\n",spi->weight_threshold);
 	fprintf(fo,"Using the following loci:\n");
-	for (pl = 0; pl < pi->n_loci_to_use; ++pl)
-	{
-		l=pi->loci_to_use[pl];
-		fprintf(fo, "%3d %s\n", pl + 1, names[l]);
-	}
+	for (l=0;l<rec_pi.n_loci_to_use;++l)
+		fprintf(fo,"%3d %s\n",l+1,names[rec_pi.loci_to_use[l]]);
 	fprintf(fo,"\nSubjects with minor alleles in different haplotypes:\n");
 	num_minor=0; // number of haplotypes which bear a minor allele
 	for (s = 0; s < nsub; ++s)
 	{
 		has_minor[0]=has_minor[1]=0;
-        for (pl=0;pl<pi->n_loci_to_use;++pl)
+        for (l=0;l<rec_pi.n_loci_to_use;++l)
 			{
-				l=pi->loci_to_use[pl];
 				for (a=0;a<2;++a)
-					if (sub[s]->all[l][a]==rarer[l])
+					if (sub[s]->all[rec_pi.loci_to_use[l]][a]==rec_rarer[rec_pi.loci_to_use[l]])
 						has_minor[a]=1;
 			}
 		num_minor=has_minor[0]+has_minor[1];
@@ -46,10 +53,9 @@ void do_recessive_HWE_test_with_haplotypes(FILE *fo, float *score, subject **sub
 			fprintf(fo,"%-10s %d\n",sub[s]->id,sub[s]->cc);
 			for (a = 0; a < 2; ++a)
 			{
-				for (pl = 0; pl < pi->n_loci_to_use; ++pl)
+				for (l = 0; l < rec_pi.n_loci_to_use; ++l)
 				{
-					l=pi->loci_to_use[pl];
-					fprintf(fo,"%d ",1+(sub[s]->all[l][a] == rarer[l]));
+					fprintf(fo,"%d ",1+(sub[s]->all[rec_pi.loci_to_use[l]][a] == rec_rarer[rec_pi.loci_to_use[l]]));
 				}
 				fprintf(fo,"\n");
 			}
@@ -96,11 +102,11 @@ void do_recessive_HWE_test_with_haplotypes(FILE *fo, float *score, subject **sub
 				dchi+=(tab[r][c]-ex[r][c])*(tab[r][c]-ex[r][c])/(ex[r][c]<1?1:ex[r][c]); /* if expected less than 1 set it to 1 */
 	if (col_tot[0]==0 || col_tot[1]==0)
 		dchi=0; 
-	p=chistat(dchi,1.0)/2; // keep all p values one-tailed
-	fprintf(fo,"\n\nRecessive chi-squared = %f, 1 df, p = %f\n",dchi,2*p);	
-	fprintf(fo,"SLP = %.2f (signed log10(p), positive if homozygotes more frequent in cases than controls)\n",log10(2*p)*(ex[1][1]>tab[1][1]?1:-1));
+	p=chistat(dchi,1.0)/2;
 	if (ex[1][1]>tab[1][1])
 		p=1-p;
+	fprintf(fo,"\n\nRecessive chi-squared = %f, 1 df, p = %f\n",dchi,p);	
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));
 
 	hapMAF=(counts[0][1]*0.5+counts[0][2]+counts[1][1]*0.5+counts[1][2])/nsub;
 	geno_prob[0]=(1-hapMAF)*(1-hapMAF);
@@ -126,24 +132,22 @@ void do_recessive_HWE_test_with_haplotypes(FILE *fo, float *score, subject **sub
 			if (ex[0][c]!=0 && tab[0][c]!=0)
 				dchi+=(fabs(tab[0][c]-ex[0][c])-0.5)*(fabs(tab[0][c]-ex[0][c])-0.5)/(ex[0][c]<1?1:ex[0][c]);
 			/* using Yates correction */
-		p=chistat(dchi,1.0)/2; // one-tailed
-		fprintf(fo,"\nRecessive HWE for cases chi-squared = %f, 1 df, p = %f\n",dchi,2*p);	
+		p=chistat(dchi,1.0)/2;
 		if (ex[0][1]>tab[0][1])
 			p=1-p;
+		fprintf(fo,"\nRecessive HWE chi-squared = %f, 1 df, p = %f\n",dchi,p);	
 	}
 	else
 	{
 		if (tab[0][1]==0)
-			p=0.5;
+			p=1.0;
 		else
-			p=one_tailed_binomial_p(row_tot[1],tab[0][1]-1,geno_prob[2]);
-		if (tab[0][1]/row_tot[1]<geno_prob[2])
-			p=1-p;
+			p=1-cumulBinom(row_tot[1],tab[0][1]-1,geno_prob[2]);
 		if (p<=0)
 			p=pow((double)10,(double)-20);
-		fprintf(fo,"\n\nRecessive HWE for cases exact test, p = %f\n",2*p);	
+		fprintf(fo,"\n\nRecessive HWE exact test, p = %f\n",p);	
 	}
-	fprintf(fo,"SLP = %.2f  (signed log10(p), positive if homozygote cases more frequent than expected under HWE)\n",p<0.5?-log10(2*p):log10(2*(1-p)));
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));
 	tab[0][1]=counts[0][2];
 	ex[0][1]=geno_prob[2]*row_tot[0];
 	tab[0][0]=row_tot[0]-tab[0][1];
@@ -163,20 +167,18 @@ void do_recessive_HWE_test_with_haplotypes(FILE *fo, float *score, subject **sub
 		p=chistat(dchi,1.0)/2;
 		if (ex[0][1]>tab[0][1])
 			p=1-p;
-		fprintf(fo,"\n\nRecessive HWE for controls chi-squared = %f, 1 df, p = %f\n",dchi,2*p);
+		fprintf(fo,"\n\nRecessive HWE for controls chi-squared = %f, 1 df, p = %f\n",dchi,p);	
 	}
 	else
 	{
 		if (tab[0][1]==0)
-			p=0.5;
+			p=1.0;
 		else
-			p=one_tailed_binomial_p(row_tot[1],tab[0][1]-1,geno_prob[2]);
-		if (tab[0][1]/row_tot[1]<geno_prob[2])
-			p=1-p;
+			p=1-cumulBinom(row_tot[0],tab[0][1]-1,geno_prob[2]);
 		if (p<=0)
 			p=pow((double)10,(double)-20);
-		fprintf(fo,"\n\nRecessive HWE for controls exact test, p = %f\n",2*p);	
+		fprintf(fo,"\n\nRecessive HWE for controls exact test, p = %f\n",p);	
 	}
-	fprintf(fo,"SLP = %.2f (signed log10(p), positive if homozygote controls more frequent than expected under HWE)\n",p<0.5?-log10(2*p):log10(2*(1-p)));
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));	
 }
 

@@ -244,7 +244,7 @@ return (!found_error);
 
 int read_all_subjects(FILE *fi,subject **s,int *nsub,par_info *pi)
 {
-char id[MAX_ID_LENGTH+1];
+char id[35];
 int found_error;
 found_error=0;
 *nsub=0;

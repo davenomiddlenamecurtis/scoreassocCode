@@ -2,8 +2,6 @@
 
 #include "scoreassoc.hpp"
 
-// Throughout, I am going to calculate a one-tailed p but then report SLP for the two-tailed p
-
 #define TESTFRACTION 0.1
 
 #define MIN(X,Y) (((X) < (Y)) ? (X) : (Y))
@@ -47,22 +45,10 @@ double cumulBinom(int N,int k,double p)
 	return cumulP;
 }
 
-double one_tailed_binomial_p(int N, int k, double p)
-{
-	double pval;
-	if (k>N*p) // use right tail
-		pval=1-cumulBinom(N,k-1,p);
-	else if (k+1<N*p)
-		pval=cumulBinom(N,k,p);
-	else
-		pval=0.5;
-	return pval;
-}
-
-void do_recessive_HWE_test(FILE *fo,float *score,subject **sub,int nsub,par_info *pi,sa_par_info *spi,float cc_freq[2][MAX_LOCI],float cc_count[2][MAX_LOCI],int max_cc[2],float *weight,float *missing,int *rarer,char names[MAX_LOCI][20])
+void do_recessive_HWE_test(FILE *fo,float *score,subject **sub,int nsub,par_info *pi,sa_par_info *spi,float cc_freq[2][MAX_LOCI],float cc_count[2][MAX_LOCI],int max_cc[2],float *weight,float *missing,int *old_rarer,char names[MAX_LOCI][20])
 {
 	float tab[2][2],ex[2][2],col_tot[3],row_tot[2],N,counts[2][3],hom_counts[2],all_count[MAX_LOCI],exp_hom_freq,homoz;
-	int r,c,s,l,ll,lll,pl,pll,plll,a,genotype,first,all_genotype,g;
+	int r,c,s,l,ll,lll,a,genotype,first,all_genotype,rec_rarer[MAX_LOCI],g;
 	int n_loci_to_remove,loci_to_remove[MAX_LOCI];
 	double p,df,dchi;
 	float freq,tot,geno_prob[3],geno_count[MAX_LOCI][3];
@@ -70,19 +56,23 @@ void do_recessive_HWE_test(FILE *fo,float *score,subject **sub,int nsub,par_info
 	par_info rec_pi; // use this to keep track of which loci we are using
 	// first thing we will do is remove loci which fail the weight threshold
 	// note that weights and rarer are indexed up to pi->n_loci_to_use
-	for (pl=0,ll=0;pl<pi->n_loci_to_use;++pl)
+	for (l=0,ll=0;l<pi->n_loci_to_use;++l)
 	{
-		l=pi->loci_to_use[pl];
 		if (weight[l]>=spi->weight_threshold)
 		{
-			rec_pi.loci_to_use[ll]=l;
+			rec_pi.loci_to_use[ll]=pi->loci_to_use[l];
+			rec_rarer[rec_pi.loci_to_use[ll]]=rarer[l]; // here is where we go back to indexing rec_rarer in the same way as other locus attributes
 			if (spi->use_cc_freqs[0])
-				contMAF[l]=rarer[l]==2?cc_freq[0][l]:(1-cc_freq[0][l]);
+				contMAF[ll]=rarer[l]==2?cc_freq[0][pi->loci_to_use[l]]:(1-cc_freq[0][pi->loci_to_use[l]]);
+			// we think we are looking at the original frequencies as they were read in 
+			// but now we are only keeping those for the qualifying loci and they are stored in contMAF
 			++ll;
 		}
 	}
 	rec_pi.n_loci_to_use=ll;
 
+	// from now on it impossible to marry up the weights with the loci listed in rec_pi
+	// hope that is OK
 	N=0;
 	for (r=0;r<2;++r)
 	{
@@ -91,26 +81,22 @@ void do_recessive_HWE_test(FILE *fo,float *score,subject **sub,int nsub,par_info
 		row_tot[r]=0;
 		hom_counts[r]=0;
 	}
-	for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
+	for (l=0;l<rec_pi.n_loci_to_use;++l)
 		for (g=0;g<3;++g)
-			geno_count[pl][g]=0;
+			geno_count[l][g]=0;
 	// begin by just listing all subjects with two or more variants at these loci before excluding on LD
 	fprintf(fo,"\nRecessive analyses based on loci with weight reaching %f\n",spi->weight_threshold);
 	fprintf(fo,"Using the following loci:\n");
-	for (pl = 0; pl < rec_pi.n_loci_to_use; ++pl)
-	{
-		l = rec_pi.loci_to_use[pl];
-		fprintf(fo, "%3d %s\n", pl + 1, names[l]);
-	}
+	for (l=0;l<rec_pi.n_loci_to_use;++l)
+		fprintf(fo,"%3d %s\n",l+1,names[rec_pi.loci_to_use[l]]);
 	fprintf(fo,"\nSubjects with two or more minor alleles:\n");
 	for (s=0;s<nsub;++s)
 	{
 		genotype=0;
-        for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
+        for (l=0;l<rec_pi.n_loci_to_use;++l)
 			{
-				l = rec_pi.loci_to_use[pl];
 				for (a=0;a<2;++a)
-					if (sub[s]->all[l][a]==rarer[l])
+					if (sub[s]->all[rec_pi.loci_to_use[l]][a]==rec_rarer[rec_pi.loci_to_use[l]])
 					{
 						if (genotype<2)
 							++genotype;
@@ -121,106 +107,84 @@ void do_recessive_HWE_test(FILE *fo,float *score,subject **sub,int nsub,par_info
 		{
 			first=1;
 			fprintf(fo,"%-10s %d   ",sub[s]->id,sub[s]->cc);
-        for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
-			{
-				l = rec_pi.loci_to_use[pl];
+			for (l=0;l<rec_pi.n_loci_to_use;++l)
 				for (a=0;a<2;++a)
-					if (sub[s]->all[l][a] == rarer[l])
+					if (sub[s]->all[rec_pi.loci_to_use[l]][a]==rarer[l])
 					{
-					fprintf(fo, "%s%d", first ? "" : "-", pl + 1);
-					first = 0;
+						fprintf(fo,"%s%d",first?"":"-",l+1);
+						first=0;
 					}
-			}
 			fprintf(fo,"\n");
 		}
 	}
 	// now do the exclusions based on LD
-	for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
+	for (l=0;l<rec_pi.n_loci_to_use;++l)
 	{
-		l=rec_pi.loci_to_use[pl];
-		for (pll = 0; pll < rec_pi.n_loci_to_use; ++pll)
-		{
-		ll=rec_pi.loci_to_use[pll];
-			if (l != ll)
-				occurs_with[l][ll] = 0;
-		}
+		for (ll=0;ll<rec_pi.n_loci_to_use;++ll)
+			if (l!=ll)
+				occurs_with[l][ll]=0;
 		occurs[l]=0;
 	}
 	for (s=0;s<nsub;++s)
 	{
-		for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
+		for (l=0;l<rec_pi.n_loci_to_use;++l)
 		{
-			l=rec_pi.loci_to_use[pl];
-			occ[0]=(sub[s]->all[l][0]==rarer[l])+(sub[s]->all[l][1]==rarer[l]); // count number of rare alleles at first locus
+			occ[0]=(sub[s]->all[rec_pi.loci_to_use[l]][0]==rec_rarer[rec_pi.loci_to_use[l]])+(sub[s]->all[rec_pi.loci_to_use[l]][1]==rec_rarer[rec_pi.loci_to_use[l]]);
 			if (occ[0]!=0)
 			{
 				occurs[l]+=occ[0];
-				for (pll=0;pll<rec_pi.n_loci_to_use;++pll)
-					if (pl!=pll)
+				for (ll=0;ll<rec_pi.n_loci_to_use;++ll)
+					if (l!=ll)
 					{
-					ll=rec_pi.loci_to_use[pll];
-					occ[1]=(sub[s]->all[ll][0]==rarer[ll])+(sub[s]->all[ll][1]==rarer[ll]);
-					occurs_with[l][ll]+=MIN(occ[0],occ[1]); // number of variants occurring together at both positions, 2 if both homozygous
+					occ[1]=(sub[s]->all[rec_pi.loci_to_use[ll]][0]==rec_rarer[rec_pi.loci_to_use[ll]])+(sub[s]->all[rec_pi.loci_to_use[ll]][1]==rec_rarer[rec_pi.loci_to_use[ll]]);
+					occurs_with[l][ll]+=MIN(occ[0],occ[1]); // I think this is right - number of variants occurring at both positions
 					}
 			}
 		}
 	}
 	n_loci_to_remove=0;
-	for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
-		for (pll=0;pll<rec_pi.n_loci_to_use;++pll)
-			if (pl!=pll)
+	for (l=0;l<rec_pi.n_loci_to_use;++l)
+		for (ll=0;ll<rec_pi.n_loci_to_use;++ll)
+			if (l!=ll)
 			{
-			l=rec_pi.loci_to_use[pl];
-			ll=rec_pi.loci_to_use[pll];
 				if (occurs_with[ll][l]>1 && occurs_with[ll][l]/occurs[ll]>spi->LD_threshold && occurs_with[ll][l]/occurs[ll]>=occurs_with[l][ll]/occurs[l])
 				{
-					loci_to_remove[n_loci_to_remove++]=pll;
+					loci_to_remove[n_loci_to_remove++]=ll;
 					if (occurs_with[ll][l]==occurs[l] && occurs_with[ll][l]==occurs[ll])
-						fprintf(fo,"Removing locus %d because it always occurs together with locus %d (%.0f times)\n",pll+1,pl+1,occurs_with[l][ll]);
+						fprintf(fo,"Removing locus %d because it always occurs together with locus %d (%.0f times)\n",ll+1,l+1,occurs_with[l][ll]);
 					else
-						fprintf(fo,"Removing locus %d because it usually occurs with locus %d\n",pll+1,pl+1);
-					for (plll = 0; plll < rec_pi.n_loci_to_use; ++plll)
-					{
-						lll = rec_pi.loci_to_use[plll];
-						occurs_with[ll][lll] = occurs_with[lll][ll] = 0; // this stops pll being added to the list again and stops it being used to remove pl
-					}
+						fprintf(fo,"Removing locus %d because it usually occurs with locus %d\n",ll+1,l+1);
+					for (lll=0;lll<rec_pi.n_loci_to_use;++lll)
+						occurs_with[ll][lll]=occurs_with[lll][ll]=0; // this stops ll being added to the list again and stops it being used to remove l
 				}
 			}
 	if (n_loci_to_remove==0)
-		fprintf(fo,"No loci need to be removed for exceeding the LD threshold of %f\n",spi->LD_threshold);
-	for (pl=0;pl<n_loci_to_remove;++pl)
+		fprintf(fo,"No loci need to be removed for being in LD\n");
+	for (l=0;l<n_loci_to_remove;++l)
 	{
-		for (pll=loci_to_remove[pl];pll<rec_pi.n_loci_to_use-1;++pll)
-			rec_pi.loci_to_use[pll]=rec_pi.loci_to_use[pll+1];
+		for (ll=loci_to_remove[l];ll<rec_pi.n_loci_to_use-1;++ll)
+			rec_pi.loci_to_use[ll]=rec_pi.loci_to_use[ll+1];
 		--rec_pi.n_loci_to_use;
-		for (pll=l;pll<n_loci_to_remove;++pll)
-			if (loci_to_remove[pll]>loci_to_remove[pl])
-				--loci_to_remove[pll]; // loci with larger numbers will have to be renumbered down
+		for (ll=l;ll<n_loci_to_remove;++ll)
+			if (loci_to_remove[ll]>loci_to_remove[l])
+				--loci_to_remove[ll]; // loci with larger numbers will have to be renumbered down
 	}
 	fprintf(fo,"Will retain the following loci:\n");
-	for (pl = 0; pl < rec_pi.n_loci_to_use; ++pl)
-	{
-		l=rec_pi.loci_to_use[pl];
-		fprintf(fo, "%3d %s\n", pl + 1, names[l]);
-	}
+		for (l=0;l<rec_pi.n_loci_to_use;++l)
+			fprintf(fo,"%3d %s\n",l+1,names[rec_pi.loci_to_use[l]]);
 	for (c=0;c<3;++c)
 		col_tot[c]=0;
-	for (pl = 0; pl < rec_pi.n_loci_to_use; ++pl)
-	{
-		l=rec_pi.loci_to_use[pl];
-		all_count[l] = 0;
-	}
-	fprintf(fo,"\nSubjects with two or more minor alleles:\n");
+    for (l=0;l<rec_pi.n_loci_to_use;++l)
+		all_count[l]=0;
 	for (s=0;s<nsub;++s)
 	{
 		genotype=0;
 		homoz=0;
-        for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
+        for (l=0;l<rec_pi.n_loci_to_use;++l)
 			{
-			l=rec_pi.loci_to_use[pl];
 				g=0;
 				for (a=0;a<2;++a)
-					if (sub[s]->all[l][a]==rarer[l])
+					if (sub[s]->all[rec_pi.loci_to_use[l]][a]==rec_rarer[rec_pi.loci_to_use[l]])
 					{
 						++g;
 						if (genotype<2)
@@ -229,8 +193,8 @@ void do_recessive_HWE_test(FILE *fo,float *score,subject **sub,int nsub,par_info
 					}
 				if (g==2)
 					homoz=1;
-				if (sub[s]->all[l][0]!=0)
-					++geno_count[pl][g];
+				if (sub[s]->all[rec_pi.loci_to_use[l]][0]!=0)
+					++geno_count[l][g];
 			}
 		++counts[sub[s]->cc][genotype];
 		if (homoz)
@@ -239,16 +203,13 @@ void do_recessive_HWE_test(FILE *fo,float *score,subject **sub,int nsub,par_info
 		{
 			first=1;
 			fprintf(fo,"%-10s %d   ",sub[s]->id,sub[s]->cc);
-			for (pl = 0; pl < rec_pi.n_loci_to_use; ++pl)
-			{
-				l=rec_pi.loci_to_use[pl];
-				for (a = 0; a < 2; ++a)
-					if (sub[s]->all[l][a] == rarer[l])
+			for (l=0;l<rec_pi.n_loci_to_use;++l)
+				for (a=0;a<2;++a)
+					if (sub[s]->all[rec_pi.loci_to_use[l]][a]==rec_rarer[rec_pi.loci_to_use[l]])
 					{
-					fprintf(fo, "%s%d", first ? "" : "-", pl + 1);
-					first = 0;
+						fprintf(fo,"%s%d",first?"":"-",l+1);
+						first=0;
 					}
-			}
 			fprintf(fo,"\n");
 		}
 	}
@@ -261,18 +222,17 @@ for (r=0;r<2;++r)
     N+=counts[r][c];
     }
 exp_hom_freq=0;
-for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
+for (l=0;l<rec_pi.n_loci_to_use;++l)
 {
-	l=rec_pi.loci_to_use[pl];
 	tot=0;
 	for (g=0;g<3;++g)
-		tot+=geno_count[pl][g];
+		tot+=geno_count[l][g];
 	MAF[l]=all_count[l]/(2*tot);
 	if (spi->use_cc_freqs[0])
 	{
 		MAF[l]=(MAF[l]*N+contMAF[l]*max_cc[0])/(N+max_cc[0]); 
 		// weighted average of control and case frequencies
-		// just use max number of controls 
+		// just use max number of controls because I can no longer keep track of cc_count
 	}
 	exp_hom_freq=1-((1-exp_hom_freq)*(1-MAF[l]*MAF[l]));
 }
@@ -282,9 +242,8 @@ for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
 // now work out probs for a sub to have 0, 1 or more B alleles, i.e. include compound heterozygotes
 	geno_prob[0]=1;
 	geno_prob[1]=0;
-	for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
+	for (l=0;l<rec_pi.n_loci_to_use;++l)
 	{
-		l=rec_pi.loci_to_use[pl];
 		geno_prob[1]*=(1-MAF[l])*(1-MAF[l]); // probability that this locus is AA so does not change overall allele count
 		geno_prob[1]+=geno_prob[0]*2*(1-MAF[l])*MAF[l]; // probability that this locus is AB
 		geno_prob[0]*=(1-MAF[l])*(1-MAF[l]); 
@@ -338,11 +297,12 @@ for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
 	}
 	if (col_tot[0]==0 || col_tot[1]==0)
 		dchi=0; // will not be otherwise because of Yates correction
-	p=chistat(dchi,1.0)/2; // one-tailed
-	fprintf(fo,"\n\nRecessive chi-squared = %f, 1 df, p = %f\n",dchi,2*p);	
-	fprintf(fo,"SLP = %.2f(signed log10(p), positive if cases more frequently have two minor alleles than controls)\n",log10(2*p)*(ex[1][1]>tab[1][1]?1:-1));
+	p=chistat(dchi,1.0)/2;
 	if (ex[1][1]>tab[1][1])
 		p=1-p;
+	fprintf(fo,"\n\nRecessive chi-squared = %f, 1 df, p = %f\n",dchi,p);	
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));
+
 
  	fprintf(fo,"\nExpected probabilities for subjects to have total of 0, 1 or more minor alleles:\n%8.6f %8.6f %8.6f \n",
 		geno_prob[0],geno_prob[1],geno_prob[2]);
@@ -364,23 +324,21 @@ for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
 			if (ex[0][c]!=0 && tab[0][c]!=0)
 				dchi+=(fabs(tab[0][c]-ex[0][c])-0.5)*(fabs(tab[0][c]-ex[0][c])-0.5)/(ex[0][c]<1?1:ex[0][c]);
 		p=chistat(dchi,1.0)/2;
-		fprintf(fo,"\nRecessive HWE for cases chi-squared = %f, 1 df, p = %f\n",dchi,2*p);	
 		if (ex[0][1]>tab[0][1])
 			p=1-p;
+		fprintf(fo,"\nRecessive HWE for cases chi-squared = %f, 1 df, p = %f\n",dchi,p);	
 	}
 	else
 	{
 		if (tab[0][1]==0)
-			p=0.5;
+			p=1.0;
 		else
-			p=one_tailed_binomial_p(row_tot[1],tab[0][1],geno_prob[2]);
-		if (tab[0][1]/row_tot[1]<geno_prob[2])
-			p=1-p;
+			p=1-cumulBinom(row_tot[1],tab[0][1]-1,geno_prob[2]);
 		if (p<=0)
 			p=pow((double)10,(double)-20);
-		fprintf(fo,"\n\nRecessive HWE for cases exact test, p = %f\n",2*p);	
+		fprintf(fo,"\n\nRecessive HWE for cases exact test, p = %f\n",p);	
 	}
-	fprintf(fo,"SLP = %.2f (signed log10(p), positive if cases more frequently have two minor alleles than expected)\n",p<0.5?-log10(2*p):log10(2*(1-p)));
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));
 	tab[0][1]=counts[0][2];
 	ex[0][1]=geno_prob[2]*row_tot[0];
 	tab[0][0]=row_tot[0]-tab[0][1];
@@ -398,25 +356,23 @@ for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
 			if (ex[0][c]!=0 && tab[0][c]!=0)
 				dchi+=(fabs(tab[0][c]-ex[0][c])-0.5)*(fabs(tab[0][c]-ex[0][c])-0.5)/(ex[0][c]<1?1:ex[0][c]);
 		p=chistat(dchi,1.0)/2;
-		fprintf(fo,"\n\nRecessive HWE for controls chi-squared = %f, 1 df, p = %f\n",dchi,2*p);	
 		if (ex[0][1]>tab[0][1])
 			p=1-p;
+		fprintf(fo,"\n\nRecessive HWE for controls chi-squared = %f, 1 df, p = %f\n",dchi,p);	
 	}
 	else
 	{
 		if (tab[0][1]==0)
-			p=0.5;
+			p=1.0;
 		else
-			p=one_tailed_binomial_p(row_tot[1],tab[0][1],geno_prob[2]);
-		if (tab[0][1]/row_tot[1]<geno_prob[2])
-			p=1-p;
+			p=1-cumulBinom(row_tot[0],tab[0][1]-1,geno_prob[2]);
 		if (p<=0)
 			p=pow((double)10,(double)-20);
-		fprintf(fo,"\n\nRecessive HWE for controls exact test, p = %f\n",2*p);	
+		fprintf(fo,"\n\nRecessive HWE for controls exact test, p = %f\n",p);	
 	}
-	fprintf(fo,"SLP = %.2f (signed log10(p), positive if controls more frequently have two minor alleles than expected)\n",p<0.5?-log10(2*p):log10(2*(1-p)));
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));
 
-	// Now do standard chi-squared test for true homozygotes
+	// Now do staandard chi-squared test for true homozygotes
 	col_tot[0]=col_tot[1]=0;
 	for (r=0;r<2;++r)
 	{
@@ -454,11 +410,11 @@ for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
 // but do not allow expected values less than one
 	if (col_tot[0]==0 || col_tot[1]==0)
 		dchi=0; // will not be otherwise because of Yates correction
-	p=chistat(dchi,1.0)/2; // one-tailed
-	fprintf(fo,"\n\nRecessive chi-squared for homozygotes = %f, 1 df, p = %f\n",dchi,2*p);	
-	fprintf(fo,"SLP = %.2f (signed log10(p), positive if homozygotes more frequent in cases than controls)\n",log10(2*p)*(ex[1][1]>tab[1][1]?1:-1));
+	p=chistat(dchi,1.0)/2;
 	if (ex[1][1]>tab[1][1])
 		p=1-p;
+	fprintf(fo,"\n\nRecessive chi-squared for homozygotes = %f, 1 df, p = %f\n",dchi,p);	
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));
 
 
 	 // now we do the recessive HWE test for all loci considered invidually as true homozygotes then summated 
@@ -479,23 +435,21 @@ for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
 			if (ex[0][c]!=0 && tab[0][c]!=0)
 				dchi+=(fabs(tab[0][c]-ex[0][c])-0.5)*(fabs(tab[0][c]-ex[0][c])-0.5)/(ex[0][c]<1?1:ex[0][c]);
 		p=chistat(dchi,1.0)/2;
-		fprintf(fo,"\n\nRecessive HWE for true homozygote cases chi-squared = %f, 1 df, p = %f\n",dchi,2*p);	
 		if (ex[0][1]>tab[0][1])
 			p=1-p;
+		fprintf(fo,"\n\nRecessive HWE for true homozygote cases chi-squared = %f, 1 df, p = %f\n",dchi,p);	
 	}
 	else
 	{
 		if (tab[0][1]==0)
-			p=0.5;
+			p=1.0;
 		else
-			p=one_tailed_binomial_p(row_tot[1],tab[0][1]-1,exp_hom_freq);
-		if (tab[0][1]/row_tot[1]<exp_hom_freq)
-			p=1-p;
+			p=1-cumulBinom(row_tot[1],tab[0][1]-1,exp_hom_freq);
 		if (p<=0)
 			p=pow((double)10,(double)-40);
-		fprintf(fo,"\n\nRecessive HWE for true homozygote cases exact test, p = %f\n",2*p);	
+		fprintf(fo,"\n\nRecessive HWE for true homozygote cases exact test, p = %f\n",p);	
 	}
-	fprintf(fo,"SLP = %.2f (signed log10(p), positive if homozygote cases more frequent than expected under HWE)\n",p<0.5?-log10(2*p):log10(2*(1-p)));
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));
 	tab[0][1]=hom_counts[0];
 	ex[0][1]=exp_hom_freq*row_tot[0];
 	tab[0][0]=row_tot[0]-tab[0][1];
@@ -513,23 +467,21 @@ for (pl=0;pl<rec_pi.n_loci_to_use;++pl)
 			if (ex[0][c]!=0 && tab[0][c]!=0)
 				dchi+=(fabs(tab[0][c]-ex[0][c])-0.5)*(fabs(tab[0][c]-ex[0][c])-0.5)/(ex[0][c]<1?1:ex[0][c]);
 		p=chistat(dchi,1.0)/2;
-		fprintf(fo,"\n\nRecessive HWE for true homozygote controls chi-squared = %f, 1 df, p = %f\n",dchi,2*p);	
 		if (ex[0][1]>tab[0][1])
 			p=1-p;
+		fprintf(fo,"\n\nRecessive HWE for true homozygote controls chi-squared = %f, 1 df, p = %f\n",dchi,p);	
 	}
 	else
 	{
 		if (tab[0][1]==0)
-			p=0.5;
+			p=1.0;
 		else
-			p=one_tailed_binomial_p(row_tot[1],tab[0][1]-1,exp_hom_freq);
-		if (tab[0][1]/row_tot[1]<exp_hom_freq)
-			p=1-p;
+			p=1-cumulBinom(row_tot[0],tab[0][1]-1,exp_hom_freq);
 		if (p<=0)
 			p=pow((double)10,(double)-40);
 		fprintf(fo,"\n\nRecessive HWE for true homozygote controls exact test, p = %f\n",p);	
 	}
-	fprintf(fo,"SLP = %.2f (signed log10(p), positive if homozygote controls more frequent than expected under HWE)\n",p<0.5?-log10(2*p):log10(2*(1-p)));
+	fprintf(fo,"-log(p) = %.2f\n",-log10(p));
 
 
 	return;
