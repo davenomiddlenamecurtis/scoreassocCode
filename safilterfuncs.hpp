@@ -1,10 +1,7 @@
 #ifndef SAFILTERFUNCSHPP
 #define SAFILTERFUNCSHPP
 
-extern "C"
-{
-#include "scoreassoc.h"
-};
+#include "scoreassoc.hpp"
 
 #ifndef USEFILTERS
 #define USEFILTERS
