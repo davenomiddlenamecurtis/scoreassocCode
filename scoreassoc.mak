@@ -9,7 +9,7 @@ MAX_SUB_MAK = 10000
 
 OURFLAGS = $(CFLAGS) -DMAX_LOCI=$(MAX_LOCI_MAK) -DMAX_ALL=$(MAX_ALL_MAK) -DMAX_SUB=$(MAX_SUB_MAK) 
 
-HEADERS = cdflib.h  dcerror.hpp  dcexpr.hpp  fisher.h  gcutils.h  safilterfuncs.hpp  scoreassoc.h
+HEADERS = cdflib.h  dcerror.hpp  dcexpr.hpp  fisher.h  gcutils.h  safilterfuncs.hpp  scoreassoc.hpp
 # cheat and just assume all code dependent on all of these
 
 ifdef INOBJ
