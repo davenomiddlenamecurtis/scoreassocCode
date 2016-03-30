@@ -6,10 +6,7 @@
 #include <string>
 #include <map>
 
-extern "C"
-{
 #include "scoreassoc.h"
-};
 
 #include "dcexpr.hpp"
 #include "safilterfuncs.hpp"
