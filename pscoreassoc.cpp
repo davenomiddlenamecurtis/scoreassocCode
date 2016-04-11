@@ -120,6 +120,7 @@ int read_all_args(char *argv[],int argc, par_info *pi, sa_par_info *spi)
 	spi->LD_threshold=0.9;
 	spi->use_haplotypes=spi->use_trios=0;
 	spi->use_cc_freqs[0]=spi->use_cc_freqs[1]=0;
+	spi->use_probs=0;
 	while (getNextArg(arg, argc, argv, fp,&arg_depth, &arg_num))
 	{
 		if (strncmp(arg, "--", 2))
@@ -213,9 +214,21 @@ int process_options(par_info *pi, sa_par_info *spi)
 	{
 		dcerror(1,"Must specify only one of --psdatafile, --gcdatafile or --gendatafile"); exit(1);
 	}
-	if (spi->df[GCDATAFILE].fn[0]!='\0' && pi->nloci==0)
+	if ((spi->df[GCDATAFILE].fn[0]!='\0' || spi->df[GENDATAFILE].fn[0]!='\0' ) && pi->nloci==0)
 	{
-		dcerror(1,"Need to specify --nloci when using --gcdatafile"); exit(1);
+		dcerror(1,"Need to specify --nloci when using --gcdatafile or --gendatafile"); exit(1);
+	}
+	if (spi->df[GENDATAFILE].fn[0] != '\0')
+	{
+		if (spi->do_recessive_test)
+		{
+			dcerror(1, "Cannot do recessive test with --gendatafile"); exit(1);
+		}
+		if (spi->use_trios)
+		{
+			dcerror(1, "Cannot use trios with --gendatafile"); exit(1);
+		}
+		spi->use_probs = 1;
 	}
 
 	for (l = 0; l < pi->nloci; ++l)
@@ -253,6 +266,41 @@ char *skip_word(char *ptr)
 	while (*ptr && isspace(*ptr))
 		++ptr;
 	return ptr;
+}
+
+int read_all_gen_subjects(FILE *fi,subject **sub,int *nsub,par_info *pi)
+{
+char id[MAX_ID_LENGTH+1],*ptr;
+int n_to_skip,s,i,l;
+s=0;
+while (fgets(long_line,LONG_LINE_LENGTH,fi) && sscanf(long_line,"%s",id)==1)
+  {
+  if (s>=MAX_SUB)
+    { error("Number of subjects exceeds MAX_SUB",""); return 0; }
+  if (sscanf(long_line,"%s %d",sub[s]->id,&sub[s]->cc)!=2)
+    { error("Syntax error in subject line: ",long_line); return 0; }
+  n_to_skip=2;
+  ptr=long_line;
+  for (i=0;i<n_to_skip;++i)
+  {
+	  while (*ptr && isspace(*ptr++)) ;
+	  while (*ptr &&!isspace(*ptr++)) ;
+  }
+  for (l = 0; l < pi->nloci; ++l)
+  {
+	  if (sscanf(ptr,"%f %f %f",&sub[s]->prob[l][0],&sub[s]->prob[l][1],&sub[s]->prob[l][2])!=3)
+	  { error("Not enough genotype probabilities in subject line: ",long_line); return 0; }
+	  n_to_skip=3;
+	  for (i=0;i<n_to_skip;++i)
+	  {
+		while (*ptr && isspace(*ptr++)) ;
+		while (*ptr &&!isspace(*ptr++)) ;
+	  }
+  }
+  ++s;
+  }
+*nsub=s;
+return 1;
 }
 
 // need to consider that not all subjects may be typed for all loci
@@ -388,6 +436,8 @@ int read_all_data(par_info *pi,sa_par_info *spi,subject **sub,int *nsubptr,char 
 		read_ps_datafile(pi,spi,sub,nsubptr,names,comments, func_weight,weightMap,effectMap);
 	else if (spi->df[GCDATAFILE].fp)
 		read_all_subjects(spi->df[GCDATAFILE].fp,sub,nsubptr,pi);
+	else if (spi->df[GENDATAFILE].fp)
+		read_all_gen_subjects(spi->df[GENDATAFILE].fp,sub,nsubptr,pi);
 	if (spi->df[LOCUSFILTERFILE].fp)
 	{
 		pi->n_loci_to_use=0;
@@ -493,7 +543,7 @@ if (spi.use_trios)
 get_freqs(sub,nsub,&pi,&spi,cc_freq,cc_count,cc_genocount);
 applyExclusions(&pi);
 set_weights(spi.df[OUTFILE].fp,weight,missing_score,rarer,sub,nsub,&pi,&spi,func_weight,cc_freq,cc_count,max_cc,names,comments);
-get_scores(score,weight,missing_score,rarer,sub,nsub,&pi);
+get_scores(score,weight,missing_score,rarer,sub,nsub,&pi,&spi);
 p=do_score_onetailed_ttest(spi.df[OUTFILE].fp,score,sub,nsub,&pi,&spi,cc_freq,cc_count,max_cc,weight,missing_score,rarer);
 if (spi.df[SCOREFILE].fp)
 	write_scores(spi.df[SCOREFILE].fp,sub,nsub,score);

@@ -86,19 +86,32 @@ float do_score_onetailed_ttest(FILE *fo,float *score,subject **sub,int nsub,par_
 }
 
 /* treats male subjects as homozygous females for X loci*/
-void get_scores(float *score,float *weight,float *missing,int *rarer,subject **sub,int nsub,par_info *pi)
+void get_scores(float *score,float *weight,float *missing,int *rarer,subject **sub,int nsub,par_info *pi,sa_par_info *spi)
 {
-	int l,s,a;
+	int l,ll,s,a,p;
 	for (s=0;s<nsub;++s)
 	{
 		score[s]=0;
         for (l=0;l<pi->n_loci_to_use;++l)
 			{
-				for (a=0;a<2;++a)
-					if (sub[s]->all[pi->loci_to_use[l]][a]==rarer[l])
-						score[s]+=weight[l];
-					else if (sub[s]->all[pi->loci_to_use[l]][a]==0)
-						score[s]+=missing[l];
+				ll=pi->loci_to_use[l];
+				if (spi->use_probs)
+				{
+					if (sub[s]->prob[ll][0]+sub[s]->prob[ll][1]+sub[s]->prob[ll][2]==0)
+						score[s] += missing[l]*2; 
+					else if (rarer[l]==2)
+						score[s]+=sub[s]->prob[ll][1]+sub[s]->prob[ll][2]*2;
+					else
+						score[s]+=sub[s]->prob[ll][1]+sub[s]->prob[ll][0]*2;
+				}
+				else
+				{
+					for (a = 0; a < 2; ++a)
+						if (sub[s]->all[ll][a] == rarer[l])
+							score[s] += weight[l];
+						else if (sub[s]->all[ll][a] == 0)
+							score[s] += missing[l];
+				}
 			}
 	}
 }
@@ -107,14 +120,25 @@ void get_scores(float *score,float *weight,float *missing,int *rarer,subject **s
 // this function is here to allow us to exclude loci with wildly different allele frequencies, etc.
 void get_freqs(subject **sub,int nsub,par_info *pi,sa_par_info *spi,float cc_freq[2][MAX_LOCI],float cc_count[2][MAX_LOCI],float cc_genocount[2][3][MAX_LOCI])
 {
-	int l,s,nh[2],gencount[2][3],cc,i,g;
-	float ccfreq[2],vcount[2];
+	int l,s,nh[2],cc,i,g;
+	float ccfreq[2],gencount[2][3],vcount[2];
 	for (l=0;l<pi->n_loci_to_use;++l)
 	{
 		nh[0]=nh[1]=vcount[0]=vcount[1]=0;
 		for (i=0;i<3;++i)
 			for (cc=0;cc<2;++cc)
 				gencount[cc][i]=0;
+		if (spi->use_probs)
+			for (s = 0; s < nsub; ++s)
+			{
+			for (g=0;g<3;++g)
+				gencount[sub[s]->cc][g]+=sub[s]->prob[pi->loci_to_use[l]][g];
+			vcount[sub[s]->cc]+=sub[s]->prob[pi->loci_to_use[l]][1]+sub[s]->prob[pi->loci_to_use[l]][2]*2;
+			// allele count
+			nh[sub[s]->cc]+=(sub[s]->prob[pi->loci_to_use[l]][0]+sub[s]->prob[pi->loci_to_use[l]][1]+sub[s]->prob[pi->loci_to_use[l]][2])*2;
+			// allow for possibility that unknowns could be coded as 0 0 0
+			}
+		else
 		for (s=0;s<nsub;++s)
 			if (sub[s]->all[pi->loci_to_use[l]][0]!=0)
 			{
@@ -170,9 +194,8 @@ float get_zero_based_quadratic_weight(float freq,float wfactor)
 
 void set_weights(FILE *f,float *weight,float *missing_score,int *rarer,subject **sub,int nsub,par_info *pi,sa_par_info *spi,float *func_weight,float cc_freq[2][MAX_LOCI],float cc_count[2][MAX_LOCI],int max_cc[2],char names[MAX_LOCI][20],char comments[MAX_LOCI][MAX_COMMENT_LENGTH])
 {
-	int l,s,nh[2],gencount[2][3],cc,i;
-	float freq,ccfreq[2],vcount[2];
-
+	int l,ll,s,nh[2],cc,i,g;
+	float freq,ccfreq[2],vcount[2],gencount[2][3];
 
 	for (l=0;l<pi->n_loci_to_use;++l)
 	{		
@@ -180,19 +203,32 @@ void set_weights(FILE *f,float *weight,float *missing_score,int *rarer,subject *
 		for (i=0;i<3;++i)
 			for (cc=0;cc<2;++cc)
 				gencount[cc][i]=0;
-		for (s=0;s<nsub;++s)
-			if (sub[s]->all[pi->loci_to_use[l]][0]!=0)
+		ll=pi->loci_to_use[l];
+		for (s = 0; s < nsub; ++s)
+		{
+			if (spi->use_probs)
 			{
-			i=(sub[s]->all[pi->loci_to_use[l]][0]==2)+(sub[s]->all[pi->loci_to_use[l]][1]==2);
-			++gencount[sub[s]->cc][i];
-			vcount[sub[s]->cc]+=(sub[s]->all[pi->loci_to_use[l]][0]==2)+(sub[s]->all[pi->loci_to_use[l]][1]==2);
-			nh[sub[s]->cc]+=2;
+				for (g=0;g<3;++g)
+					gencount[sub[s]->cc][g]+=sub[s]->prob[ll][g];
+				vcount[sub[s]->cc] += sub[s]->prob[ll][1]+sub[s]->prob[ll][2]*2;
+				nh[sub[s]->cc]+=(sub[s]->prob[ll][0]+sub[s]->prob[ll][1]+sub[s]->prob[ll][2])*2;
 			}
+			else
+			{
+				if (sub[s]->all[ll][0] != 0)
+				{
+					i = (sub[s]->all[ll][0] == 2) + (sub[s]->all[ll][1] == 2);
+					++gencount[sub[s]->cc][i];
+					vcount[sub[s]->cc] += (sub[s]->all[ll][0] == 2) + (sub[s]->all[ll][1] == 2);
+					nh[sub[s]->cc] += 2;
+				}
+			}
+		}
 		for (cc=0;cc<2;++cc)
 			if (spi->use_cc_freqs[cc])
 			{
-				ccfreq[cc]=cc_freq[cc][pi->loci_to_use[l]];
-				nh[cc]=2*cc_count[cc][pi->loci_to_use[l]];
+				ccfreq[cc]=cc_freq[cc][ll];
+				nh[cc]=2*cc_count[cc][ll];
 			}
 			else
 			{
@@ -200,7 +236,7 @@ void set_weights(FILE *f,float *weight,float *missing_score,int *rarer,subject *
 					ccfreq[cc]=0;
 				else
 					ccfreq[cc]=vcount[cc]/nh[cc];
-				cc_freq[cc][pi->loci_to_use[l]]=ccfreq[cc];
+				cc_freq[cc][ll]=ccfreq[cc];
 				// this line is here because I will use this for filtering bad loci
 			}
 		if (nh[0]+nh[1]==0)
@@ -224,15 +260,18 @@ void set_weights(FILE *f,float *weight,float *missing_score,int *rarer,subject *
 	if (f!=0)
 	{
 		if (!spi->use_locus_names)
-			sprintf(names[pi->loci_to_use[l]],"LOC%05d",pi->loci_to_use[l]+1);
-		fprintf(f,"%-20s",names[pi->loci_to_use[l]]);
-		fprintf(f,"%5d : %5d : %5d  %8.6f  %5d : %5d : %5d  %8.6f  %8.6f  %d      %5.2f  %s\n",
+			sprintf(names[ll],"LOC%05d",ll+1);
+		fprintf(f,"%-20s",names[ll]);
+		fprintf(f,
+			spi->use_probs ?
+			"%6.2f : %6.2f : %6.2f  %8.6f  %6.2f : %6.2f : %6.2f  %8.6f  %8.6f  %d      %5.2f  %s\n" :
+			"%6.0f : %6.0f : %6.0f  %8.6f  %6.0f : %6.0f : %6.0f  %8.6f  %8.6f  %d      %5.2f  %s\n",
 			gencount[0][0],gencount[0][1],gencount[0][2],
 			ccfreq[0],
 			gencount[1][0],gencount[1][1],gencount[1][2],
 			ccfreq[1],
 			freq,rarer[l],weight[l],
-			spi->use_comments?comments[pi->loci_to_use[l]]:"");
+			spi->use_comments?comments[ll]:"");
 
 	}
 	}
