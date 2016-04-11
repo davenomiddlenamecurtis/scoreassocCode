@@ -11,6 +11,7 @@
 #include "cdflib.h"
 
 #ifndef MSDOS
+#include <unistd.h>
 #define NUL "NUL"
 #else 
 #define NUL "/dev/null"
@@ -461,7 +462,7 @@ for (pi->n_loci_to_use=0,i=0,ptr=long_line;i<pi->nloci;++i)
 return 1;
 }
 
-read_perm_par(FILE *fp,par_info *pi)
+int read_perm_par(FILE *fp,par_info *pi)
 {
 char line[2000];
 pi->do_perms=0;

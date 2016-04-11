@@ -56,7 +56,7 @@ fprintf(fo,"SCOREASSOC output\n"
 get_freqs(sub,nsub,&pi,&spi,cc_freq,cc_count,cc_genocount);
 applyExclusions(&pi);
 set_weights(fo,weight,missing_score,rarer,sub,nsub,&pi,&spi,func_weight,cc_freq,cc_count,max_cc,names,comments);
-get_scores(score,weight,missing_score,rarer,sub,nsub,&pi);
+get_scores(score,weight,missing_score,rarer,sub,nsub,&pi,&spi);
 
 if (argc > 4)
 {
