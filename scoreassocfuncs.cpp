@@ -8,82 +8,105 @@ void write_scores(FILE *fs,subject **sub,int nsub,float *score)
 		fprintf(fs,"%20s %d %8.4f\n",sub[s]->id,sub[s]->cc,score[s]);
 }
 
-float do_score_onetailed_ttest(FILE *fo,float *score,subject **sub,int nsub,par_info *pi,sa_par_info *spi,float cc_freq[2][MAX_LOCI],float cc_count[2][MAX_LOCI],int max_cc[2],float *weight,float *missing,int *rarer)
+double do_score_onetailed_ttest(FILE *fo, float *score, subject **sub, int nsub, par_info *pi, sa_par_info *spi, float cc_freq[2][MAX_LOCI], float cc_count[2][MAX_LOCI], int max_cc[2], float *weight, float *missing, int *rarer)
 {
-	int s,i,n[2],cc,l;
-	float sigma_x[2],sigma_x2[2],mean[2],var[2],tval,SE,s2,rfreq,fscore;
-	double p;
-	for (i=0;i<2;++i)
-		sigma_x[i]=sigma_x2[i]=n[i]=0;
-	for (s=0;s<nsub;++s)
-    {
-		 cc=sub[s]->cc;
-		 ++n[cc];
-		 sigma_x[cc]+=score[s];
-		 sigma_x2[cc]+=score[s]*score[s];
-    }
-    for (i=0;i<2;++i)
-    {
+	int s, i, n[2], cc, pl, l, j;
+	float sigma_x[2], sigma_x2[2], mean[2], var[2], tval, SE, s2, rfreq, fscore, z, total_score;
+	double p, pz;
+#ifndef USEMLP
+	float SLP;
+#endif
+	for (i = 0; i<2; ++i)
+		sigma_x[i] = sigma_x2[i] = n[i] = 0;
+	for (s = 0; s<nsub; ++s)
+	{
+		cc = sub[s]->cc;
+		++n[cc];
+		sigma_x[cc] += score[s];
+		sigma_x2[cc] += score[s] * score[s];
+	}
+	for (i = 0; i<2; ++i)
+	{
 		if (spi->use_cc_freqs[i])
 		{
-			float total_score=0;
-			n[i]=max_cc[i];
-			var[i]=0;
-			for (l=0;l<pi->n_loci_to_use;++l)
+			total_score = 0;
+			n[i] = max_cc[i];
+			var[i] = 0;
+			for (pl = 0; pl<pi->n_loci_to_use; ++pl)
 			{
-				float tempvar=0;
+				float tempvar = 0;
 				float ngen[3]; // number of typed subjects who are AA,AB,BB
-				sigma_x2[i]=0;
-				sigma_x[i]=0; 
-				if (rarer[l]==2)
-					rfreq=cc_freq[i][pi->loci_to_use[l]]; 
+				l = pi->loci_to_use[pl];
+				sigma_x2[i] = 0;
+				sigma_x[i] = 0;
+				if (rarer[l] == 2)
+					rfreq = cc_freq[i][l];
 				// assume supplied frequency is of alt allele, i.e. allele 2
 				// but score will be added to by rarer allele, even if this is allele 1
 				else
-					rfreq=1-cc_freq[i][pi->loci_to_use[l]];
+					rfreq = 1 - cc_freq[i][l];
 				// as actual counts missing, assume HWE
-				ngen[0]=(1-rfreq)*(1-rfreq)*cc_count[i][pi->loci_to_use[l]];
-				ngen[1]=2*rfreq*(1-rfreq)*cc_count[i][pi->loci_to_use[l]];
-				ngen[2]=rfreq*rfreq*cc_count[i][pi->loci_to_use[l]];
-				fscore=weight[l]; // average score for each subject for this locus
-				sigma_x[i]+=ngen[1]*fscore; // AB
-				sigma_x2[i]+=ngen[1]*fscore*fscore;
-				sigma_x[i]+=ngen[2]*2*fscore; // BB
-				sigma_x2[i]+=ngen[2]*4*fscore*fscore;
-				fscore=missing[l]; // as if missing scores were also independent
-				sigma_x[i]+=(max_cc[i]-cc_count[i][pi->loci_to_use[l]])*fscore;
-				sigma_x2[i]+=(max_cc[i]-cc_count[i][pi->loci_to_use[l]])*fscore*fscore;
-				tempvar=(sigma_x2[i]-sigma_x[i]*sigma_x[i]/n[i])/(n[i]-1);
-				var[i]+=tempvar; // add variances due to each marker
-				total_score+=sigma_x[i];
+				ngen[0] = (1 - rfreq)*(1 - rfreq)*cc_count[i][l];
+				ngen[1] = 2 * rfreq*(1 - rfreq)*cc_count[i][l];
+				ngen[2] = rfreq*rfreq*cc_count[i][l];
+				fscore = weight[l]; // average score for each subject for this locus
+				sigma_x[i] += ngen[1] * fscore; // AB
+				sigma_x2[i] += ngen[1] * fscore*fscore;
+				sigma_x[i] += ngen[2] * 2 * fscore; // BB
+				sigma_x2[i] += ngen[2] * 4 * fscore*fscore;
+				fscore = missing[l]; // as if missing scores were also independent
+				sigma_x[i] += (max_cc[i] - cc_count[i][l])*fscore;
+				sigma_x2[i] += (max_cc[i] - cc_count[i][l])*fscore*fscore;
+				tempvar = (sigma_x2[i] - sigma_x[i] * sigma_x[i] / n[i]) / (n[i] - 1);
+				var[i] += tempvar; // add variances due to each marker
+				total_score += sigma_x[i];
 			}
-			mean[i]=total_score/n[i];
+			mean[i] = total_score / n[i];
 		}
 		else
 		{
-			var[i]=(sigma_x2[i]-sigma_x[i]*sigma_x[i]/n[i])/(n[i]-1);
-			mean[i]=sigma_x[i]/n[i];
+			var[i] = (sigma_x2[i] - sigma_x[i] * sigma_x[i] / n[i]) / (n[i] - 1);
+			mean[i] = sigma_x[i] / n[i];
 		}
-    }
-	s2=((n[0]-1)*var[0]+(n[1]-1)*var[1])/(n[0]+n[1]-2);
-    SE=sqrt(s2*(1/(float)n[0]+1/(float)n[1]));
-	if (SE==0)
-		tval=0;
+	}
+	s2 = ((n[0] - 1)*var[0] + (n[1] - 1)*var[1]) / (n[0] + n[1] - 2);
+	SE = sqrt(s2*(1 / (float)n[0] + 1 / (float)n[1]));
+	if (SE == 0)
+		tval = 0;
 	else
-		tval=(mean[1]-mean[0])/SE;
-    p=tstat(tval,n[0]+n[1]-2.0)/2;
+		tval = (mean[1] - mean[0]) / SE;
+	p = tstat(tval, n[0] + n[1] - 2.0) / 2; // one-tailed
+	SLP = log10(2 * p)*(mean[0] >= mean[1] ? 1 : -1);
+	if (fo != NULL)
+		fprintf(fo, "             Controls  Cases     \n"
+			"N            %9d %9d\n"
+			"Mean score   %9.3f %9.3f\n"
+			"t (%d df) = %6.3f\n"
+			"p = %10.8f\n"
+			"SLP = %8.2f (signed log10(p), positive if cases score higher than controls)\n",
+			n[0], n[1], mean[0], mean[1], n[0] + n[1] - 2, tval, 2 * p, SLP);
 	if (mean[0]>mean[1])
-		p=1.0-p;
-	if (fo!=NULL)
-		fprintf(fo,"             Controls  Cases     \n"
-		           "N            %9d %9d\n"
-				   "Mean score   %9.3f %9.3f\n"
-				   "t (%d df) = %6.3f\n"
-				   "p = %10.8f\n"
-				   "-log(p) = %8.2f\n",
-				   n[0],n[1],mean[0],mean[1],n[0]+n[1]-2,tval,p,-log10(p));
-	return p;
+		p = 1.0 - p;
+#ifdef ALLOWUNEQUALVARIANCES
+	SE = sqrt(var[0] / n[0] + var[1] / n[1]);
+	if (SE == 0)
+		z = 0;
+	else
+		z = (mean[1] - mean[0]) / SE;
+	pz = one_tailed_p_norm(z);
+	fprintf(fo, "Comparison of means not assuming equal variances, standardised normal deviate z = %5.3f\np = %10.8f (one-tailed)\n",
+		z, pz);
+	if (mean[0] >= mean[1])
+		SLP = log10(2 * (1 - pz));
+	else
+		SLP = -log10(2 * pz);
+	fprintf(fo, "SLP = %8.2f (signed log10(2p), positive if cases score higher than controls)\n",
+		SLP);
+
+#endif
+	return p; // return one-tailed p
 }
+
 
 /* treats male subjects as homozygous females for X loci*/
 void get_scores(float *score,float *weight,float *missing,int *rarer,subject **sub,int nsub,par_info *pi,sa_par_info *spi)
