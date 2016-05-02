@@ -10,8 +10,8 @@
 #include "dcexpr.hpp"
 #include "safilterfuncs.hpp"
 
-#define PROGRAM "pscoreassoc"
-#define PSAVERSION "3.2"
+#define PROGRAM "scoreassoc"
+#define SAVERSION "4.0"
 
 /*
 Use same formats as pseq
