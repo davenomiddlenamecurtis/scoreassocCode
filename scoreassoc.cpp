@@ -62,7 +62,7 @@ option opt[]=
 
 void usage()
 {
-	printf("pscoreassoc --psdatafile file || --gcdatafile file || --gendatafile file     [options]\n\nOptions:\n"
+	printf("scoreassoc --psdatafile file || --gcdatafile file || --gendatafile file     [options]\n\nOptions:\n"
 "--weightfactor x (weight for very rare variants, default 10)\n"
 "--outfile file\n"
 "--weightfile file (specify functional weights)\n"
@@ -497,7 +497,7 @@ int main(int argc, char *argv[])
 	sa_par_info spi;
 	subject **sub,**new_sub,**real_sub;
 	pi.use_cc=1;
-	printf("%s v%s\n",PROGRAM,PSAVERSION);
+	printf("%s v%s\n",PROGRAM,SAVERSION);
 	printf("MAX_LOCI=%d\nMAX_SUB=%d\n",MAX_LOCI,MAX_SUB);
 
 	assert(sub=(subject **)calloc(MAX_SUB,sizeof(subject*)));
