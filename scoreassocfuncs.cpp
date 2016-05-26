@@ -81,10 +81,12 @@ double do_score_onetailed_ttest(FILE *fo, float *score, subject **sub, int nsub,
 		fprintf(fo, "             Controls  Cases     \n"
 			"N            %9d %9d\n"
 			"Mean score   %9.3f %9.3f\n"
+			"SD           %9.3f %9.3f\n"
 			"t (%d df) = %6.3f\n"
 			"p = %10.8f\n"
 			"SLP = %8.2f (signed log10(p), positive if cases score higher than controls)\n",
-			n[0], n[1], mean[0], mean[1], n[0] + n[1] - 2, tval, 2 * p, SLP);
+			n[0], n[1], mean[0], mean[1], sqrt(var[0]), sqrt(var[1]), n[0] + n[1] - 2, tval, 2 * p, SLP);
+	// I am writing SD because it will allow me to combine statistics later
 	if (mean[0]>mean[1])
 		p = 1.0 - p;
 #ifdef ALLOWUNEQUALVARIANCES
