@@ -5,7 +5,9 @@ echo
 echo This is a simple script to demonstrate running scoreassoc using plink-seq files
 echo First set up a plink-seq project (see plink-seq documentation)
 echo Then edit the script to set your project name and your phenotype
-exit
+echo You need to have files called funcWeights.txt and exclusions.txt in the current working directory
+echo (or else edit the script to point to their correct locations)
+exit 
 fi
 		
 PROJECT=SSS
