@@ -1,0 +1,9 @@
+intergenic 1
+intronic   3
+silent     3
+splice     5
+readthrough 5
+esplice 10
+missense   10
+frameshift 20
+nonsense   20
